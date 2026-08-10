@@ -40,35 +40,13 @@ def validate_sql(sql: str) -> tuple[bool, str]:
 
 if __name__ == "__main__":
 
-    test_queries = [
-
-        """
-        SELECT *
-        FROM products;
-        """,
-
-        """
-        DELETE FROM customers;
-        """,
-
-        """
-        DROP TABLE products;
-        """,
-
-        """
+    test_sql = """
         UPDATE products
         SET price = 0;
         """
 
-    ]
+    valid, message = validate_sql(test_sql)
 
-    for query in test_queries:
+    print("Valid:", valid)
+    print("Message:", message)
 
-        valid, message = validate_sql(query)
-
-        print("=" * 50)
-        print("Query:")
-        print(query.strip())
-
-        print("Valid:", valid)
-        print("Message:", message)
