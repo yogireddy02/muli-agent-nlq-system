@@ -34,6 +34,8 @@ def sql_writer_node(state: AgentState):
         ""
     )
 
+    print("\nRetry count:", state.get("retry_count", 0))
+
     sql = generate_sql(
         question=question,
         plan=plan,
