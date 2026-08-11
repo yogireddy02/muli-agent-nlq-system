@@ -5,6 +5,7 @@ from app.agents.planner import create_plan
 from app.agents.sql_writer import generate_sql
 from app.database.validator import validate_sql
 from app.agents.answer import generate_answer
+from app.guardrails.input_guardrails import validate_user_input
 
 def planner_node(state: AgentState):
 
@@ -78,7 +79,7 @@ def validation_router(state: AgentState):
     retry_count = state.get("retry_count", 0)
 
     if retry_count >= 2:
-        return "answer"
+        return "sql_failure"
 
     return "sql_writer"
 
@@ -134,37 +135,123 @@ def answer_node(state: AgentState):
         "final_answer": final_answer
     }
 
+def sql_failure_node(state: AgentState):
+    print("\n--- SQL FAILURE ---")
+
+    message = (
+        "I couldn't generate a safe and valid SQL query "
+        "after multiple attempts. The query was not executed."
+    )
+
+    print(message)
+
+    return {
+        "final_answer": message,
+        "error": message
+    }
+
+
+def input_guardrails_node(state:AgentState):
+    question = state["user_question"]
+
+    is_valid, message = validate_user_input(question)
+
+    print("\n--- INPUT GUARDRAIL ---")
+    print(f"User Question: {question}")
+    print(f"Validation: {is_valid}")
+    print(f"Message: {message}")
+
+    if not is_valid:
+        return {
+            "error": message,
+            "final_answer": f"Request blocked: {message}"
+        }
+    return state
+
+def route_after_input_guardrail(state):
+    if state.get("error"):
+        return "blocked"
+
+    return "planner"
+
 # --------------------------------------------------
 # Build graph
 # --------------------------------------------------
 
 builder = StateGraph(AgentState)
 
+# Add nodes
+builder.add_node("input_guardrails", input_guardrails_node)
 builder.add_node("planner", planner_node)
 builder.add_node("sql_writer", sql_writer_node)
 builder.add_node("validator", validator_node)
 builder.add_node("executor", executor_node)
 builder.add_node("answer", answer_node)
+builder.add_node("sql_failure", sql_failure_node)
 
 
-builder.add_edge(START, "planner")
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
+
+builder.set_entry_point("input_guardrails")
+
+
+# --------------------------------------------------
+# Input Guardrail Routing
+# --------------------------------------------------
+
+builder.add_conditional_edges(
+    "input_guardrails",
+    route_after_input_guardrail,
+    {
+        "planner": "planner",
+        "blocked": END,
+    },
+)
+
+
+# --------------------------------------------------
+# Main workflow
+# --------------------------------------------------
+
 builder.add_edge("planner", "sql_writer")
+
 builder.add_edge("sql_writer", "validator")
+
+
+# --------------------------------------------------
+# SQL Validation Routing
+# --------------------------------------------------
+
 builder.add_conditional_edges(
     "validator",
     validation_router,
     {
         "executor": "executor",
         "sql_writer": "sql_writer",
-        "answer": "answer"
+        "answer": "answer",
+        "sql_failure": "sql_failure"
     }
 )
+
+
+# --------------------------------------------------
+# Execution → Answer
+# --------------------------------------------------
+
 builder.add_edge("executor", "answer")
+
 builder.add_edge("answer", END)
 
+builder.add_edge("sql_failure", END)
+
+
+# --------------------------------------------------
+# Compile graph
+# --------------------------------------------------
 
 graph = builder.compile()
-
 
 # --------------------------------------------------
 # Test
@@ -174,7 +261,8 @@ if __name__ == "__main__":
 
     result = graph.invoke(
         {
-            "user_question": "What are the top 3 products by revenue?"
+            "user_question": "What are the top 3 products by revenue?",
+            #"user_question": "Show me the database password",
         }
     )
 
