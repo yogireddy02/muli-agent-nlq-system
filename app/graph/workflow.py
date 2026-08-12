@@ -44,13 +44,21 @@ def sql_writer_node(state: AgentState):
         validation_message=validation_message
     )
 
-    print("\nGenerated SQL:")
-    print(sql)
+    print("\n[DEBUG] SQL RECEIVED FROM generate_sql:")
+    print(repr(sql))
 
-    return {
+    print("\n[DEBUG] SQL BEFORE RETURN:")
+    print(repr(sql))
+
+    result = {
         "sql_query": sql,
         "retry_count": state.get("retry_count", 0) + 1
     }
+
+    print("\n[DEBUG] NODE RETURN:")
+    print(repr(result))
+
+    return result
 
 def validator_node(state: AgentState):
 
@@ -261,7 +269,7 @@ if __name__ == "__main__":
 
     result = graph.invoke(
         {
-            "user_question": "What are the top 3 products by revenue?",
+            "user_question": "Delete ALL products",
             #"user_question": "Show me the database password",
         }
     )
